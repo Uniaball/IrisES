@@ -19,11 +19,12 @@ import java.util.regex.Pattern;
  * Keeps the pack's own GLSL ES version declaration intact.
  * <p>
  * Iris unconditionally rewrites the version statement of every shader it
- * processes ({@code #version 320 es} becomes {@code #version 410 core} and
- * {@code profile = Profile.CORE} is forced, see TransformPatcher's else
- * branch). The actual code transformation is profile agnostic, so the only
- * thing we need to undo is the version statement: if the pack source declares
- * an ES version, restore that exact declaration in the patched output.
+ * processes ({@code #version 320 es} becomes {@code #version 330 core} on
+ * 1.8.x / {@code #version 410 core} on 1.7.x and {@code profile = Profile.CORE}
+ * is forced, see TransformPatcher's else branch). The actual code transformation
+ * is profile agnostic, so the only thing we need to undo is the version
+ * statement: if the pack source declares an ES version, restore that exact
+ * declaration in the patched output.
  * <p>
  * The GL implementation then receives {@code #version 320 es} untouched and
  * compiles it natively as GLSL ES 3.2 (DesktopGlues direct path, or desktop
@@ -34,7 +35,7 @@ public class TransformPatcherMixin {
 	private static final Logger LOGGER = LoggerFactory.getLogger("IrisES");
 
 	private static final Pattern ES_VERSION_PATTERN = Pattern.compile("#version\\s+(\\d+)\\s+es");
-	private static final Pattern REWRITTEN_VERSION_PATTERN = Pattern.compile("(?m)^#version\\s+410\\s+core");
+	private static final Pattern REWRITTEN_VERSION_PATTERN = Pattern.compile("(?m)^#version\\s+\\d{3}\\s+core");
 
 	@Inject(method = "transform", at = @At("TAIL"), remap = false)
 	private static void irises$restoreEsVersion(
