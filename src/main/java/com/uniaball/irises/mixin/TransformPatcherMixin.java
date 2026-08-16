@@ -60,6 +60,10 @@ public class TransformPatcherMixin {
 
 		Map<PatchShaderType, String> rewritten = new EnumMap<>(PatchShaderType.class);
 		for (Map.Entry<PatchShaderType, String> entry : result.entrySet()) {
+			if (entry.getValue() == null) {
+				rewritten.put(entry.getKey(), null);
+				continue;
+			}
 			rewritten.put(entry.getKey(),
 				REWRITTEN_VERSION_PATTERN.matcher(entry.getValue()).replaceAll("#version " + es + " es"));
 		}
