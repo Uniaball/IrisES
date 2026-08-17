@@ -1,5 +1,6 @@
 package com.uniaball.irises.mixin;
 
+import net.irisshaders.iris.pipeline.transform.Patch;
 import net.irisshaders.iris.pipeline.transform.PatchShaderType;
 import net.irisshaders.iris.pipeline.transform.TransformPatcher;
 import net.irisshaders.iris.pipeline.transform.parameter.Parameters;
@@ -26,9 +27,16 @@ import java.util.regex.Pattern;
  * statement: if the pack source declares an ES version, restore that exact
  * declaration in the patched output.
  * <p>
- * The GL implementation then receives {@code #version 320 es} untouched and
- * compiles it natively as GLSL ES 3.2 (DesktopGlues direct path, or desktop
- * GL 4.6 via ARB_ES3_2_compatibility).
+ * Only programs whose sources are exclusively the pack's own code are suitable
+ * for ES compilation: composite, final, shadow and compute programs
+ * (Patch.COMPOSITE / Patch.COMPUTE). Sodium and vanilla pipeline programs mix
+ * the pack sources with desktop-GLSL injected by Iris (SodiumTransformer /
+ * VanillaTransformer), which lacks precision declarations and uses uint
+ * types, so they must keep the rewritten desktop version and compile as-is.
+ * <p>
+ * ES fragment shaders require default precision declarations before any use,
+ * and Iris' transformers inject declarations without precision qualifiers, so
+ * the restored ES header carries the default precision statements along.
  */
 @Mixin(value = TransformPatcher.class, remap = false)
 public class TransformPatcherMixin {
@@ -48,6 +56,10 @@ public class TransformPatcherMixin {
 		Parameters parameters,
 		CallbackInfoReturnable<Map<PatchShaderType, String>> cir
 	) {
+		if (parameters.patch != Patch.COMPOSITE && parameters.patch != Patch.COMPUTE) {
+			return;
+		}
+
 		Map<PatchShaderType, String> result = cir.getReturnValue();
 		if (result == null) {
 			return;
@@ -58,6 +70,12 @@ public class TransformPatcherMixin {
 			return;
 		}
 
+		String esHeader = "#version " + es + " es\n"
+			+ "precision highp float;\n"
+			+ "precision highp int;\n"
+			+ "precision highp sampler2D;\n"
+			+ "precision highp sampler2DShadow;\n";
+
 		Map<PatchShaderType, String> rewritten = new EnumMap<>(PatchShaderType.class);
 		for (Map.Entry<PatchShaderType, String> entry : result.entrySet()) {
 			if (entry.getValue() == null) {
@@ -65,7 +83,7 @@ public class TransformPatcherMixin {
 				continue;
 			}
 			rewritten.put(entry.getKey(),
-				REWRITTEN_VERSION_PATTERN.matcher(entry.getValue()).replaceAll("#version " + es + " es"));
+				REWRITTEN_VERSION_PATTERN.matcher(entry.getValue()).replaceFirst(esHeader));
 		}
 
 		LOGGER.info("Restored ES version declaration (#version {} es) for program '{}'", es, name);
