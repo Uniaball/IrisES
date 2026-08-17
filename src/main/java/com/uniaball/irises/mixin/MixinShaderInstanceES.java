@@ -13,6 +13,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.nio.IntBuffer;
+
 /**
  * Diagnostic mixin for the "clouds not rendering" issue (Iris 1.8.14 + Sodium 0.8.13).
  *
@@ -47,10 +49,10 @@ public abstract class MixinShaderInstanceES {
 		LOGGER.info("[IrisES] clouds program {} linked. Active uniforms (from GL):", glRef);
 		int count = GL20C.glGetProgrami(glRef, GL20C.GL_ACTIVE_UNIFORMS);
 		for (int i = 0; i < count; i++) {
-			int[] size = new int[1];
-			int[] type = new int[1];
+			IntBuffer size = IntBuffer.allocate(1);
+			IntBuffer type = IntBuffer.allocate(1);
 			String uname = GL20C.glGetActiveUniform(glRef, i, 256, size, type);
-			LOGGER.info("[IrisES]   uniform[{}] '{}' (size {}, type {})", i, uname, size[0], type[0]);
+			LOGGER.info("[IrisES]   uniform[{}] '{}' (size {}, type {})", i, uname, size.get(0), type.get(0));
 		}
 
 		LOGGER.info("[IrisES] clouds program {} uniform locations:", glRef);
