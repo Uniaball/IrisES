@@ -37,7 +37,7 @@ public class TransformPatcherMixin {
 	private static final Pattern ES_VERSION_PATTERN = Pattern.compile("#version\\s+(\\d+)\\s+es");
 	private static final Pattern REWRITTEN_VERSION_PATTERN = Pattern.compile("(?m)^#version\\s+\\d{3}\\s+core");
 
-	@Inject(method = "transform", at = @At("TAIL"), remap = false)
+	@Inject(method = "transform", at = @At("TAIL"), cancellable = true, remap = false)
 	private static void irises$restoreEsVersion(
 		String name,
 		String vertex,
