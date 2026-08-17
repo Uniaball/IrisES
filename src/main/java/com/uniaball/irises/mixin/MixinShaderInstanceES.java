@@ -14,6 +14,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.lang.reflect.Field;
+
 /**
  * Diagnostic mixin for the "clouds not rendering" issue (Iris 1.8.14 + Sodium 0.8.13).
  *
@@ -59,8 +61,8 @@ public abstract class MixinShaderInstanceES {
 			LOGGER.info("[IrisES]   uniform '{}' -> location {}", u, loc);
 		}
 
-		int vsId = vertexShader.glRef;
-		int fsId = fragmentShader.glRef;
+		int vsId = shaderGlRef(vertexShader);
+		int fsId = shaderGlRef(fragmentShader);
 		String vsh = GL20C.glGetShaderSource(vsId);
 		String fsh = GL20C.glGetShaderSource(fsId);
 
@@ -68,6 +70,20 @@ public abstract class MixinShaderInstanceES {
 			vsId, vsh == null ? 0 : vsh.split("\n", -1).length, firstLines(vsh, 30));
 		LOGGER.info("[IrisES] clouds fragment shader (id={}, {} lines):\n{}",
 			fsId, fsh == null ? 0 : fsh.split("\n", -1).length, firstLines(fsh, 30));
+	}
+
+	private static int shaderGlRef(ShaderStage stage) {
+		if (stage == null) {
+			return -1;
+		}
+		try {
+			Field f = ShaderStage.class.getDeclaredField("glRef");
+			f.setAccessible(true);
+			return (int) f.get(stage);
+		} catch (ReflectiveOperationException e) {
+			LOGGER.warn("[IrisES] failed to read ShaderStage.glRef", e);
+			return -1;
+		}
 	}
 
 	private static String firstLines(String src, int n) {
