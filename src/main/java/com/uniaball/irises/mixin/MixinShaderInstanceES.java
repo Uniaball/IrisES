@@ -1,7 +1,6 @@
 package com.uniaball.irises.mixin;
 
 import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.gl.ShaderStage;
 import net.minecraft.client.render.VertexFormat;
 import net.minecraft.resource.ResourceFactory;
 import org.lwjgl.opengl.GL20C;
@@ -13,8 +12,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.lang.reflect.Field;
 
 /**
  * Diagnostic mixin for the "clouds not rendering" issue (Iris 1.8.14 + Sodium 0.8.13).
@@ -41,60 +38,25 @@ public abstract class MixinShaderInstanceES {
 	@Final
 	private int glRef;
 
-	@Shadow
-	@Final
-	private ShaderStage vertexShader;
-
-	@Shadow
-	@Final
-	private ShaderStage fragmentShader;
-
 	@Inject(method = "<init>(Lnet/minecraft/resource/ResourceFactory;Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;)V", at = @At("TAIL"))
 	private void irises$inspectClouds(ResourceFactory factory, String name, VertexFormat format, CallbackInfo ci) {
 		if (!"clouds".equals(name)) {
 			return;
 		}
 
-		LOGGER.info("[IrisES] clouds program {} linked. Uniform locations:", glRef);
+		LOGGER.info("[IrisES] clouds program {} linked. Active uniforms (from GL):", glRef);
+		int count = GL20C.glGetProgrami(glRef, GL20C.GL_ACTIVE_UNIFORMS);
+		for (int i = 0; i < count; i++) {
+			int[] size = new int[1];
+			int[] type = new int[1];
+			String uname = GL20C.glGetActiveUniform(glRef, i, 256, size, type);
+			LOGGER.info("[IrisES]   uniform[{}] '{}' (size {}, type {})", i, uname, size[0], type[0]);
+		}
+
+		LOGGER.info("[IrisES] clouds program {} uniform locations:", glRef);
 		for (String u : CLOUDS_UNIFORMS) {
 			int loc = GL20C.glGetUniformLocation(glRef, u);
 			LOGGER.info("[IrisES]   uniform '{}' -> location {}", u, loc);
 		}
-
-		int vsId = shaderGlRef(vertexShader);
-		int fsId = shaderGlRef(fragmentShader);
-		String vsh = GL20C.glGetShaderSource(vsId);
-		String fsh = GL20C.glGetShaderSource(fsId);
-
-		LOGGER.info("[IrisES] clouds vertex shader (id={}, {} lines):\n{}",
-			vsId, vsh == null ? 0 : vsh.split("\n", -1).length, firstLines(vsh, 30));
-		LOGGER.info("[IrisES] clouds fragment shader (id={}, {} lines):\n{}",
-			fsId, fsh == null ? 0 : fsh.split("\n", -1).length, firstLines(fsh, 30));
-	}
-
-	private static int shaderGlRef(ShaderStage stage) {
-		if (stage == null) {
-			return -1;
-		}
-		try {
-			Field f = ShaderStage.class.getDeclaredField("glRef");
-			f.setAccessible(true);
-			return (int) f.get(stage);
-		} catch (ReflectiveOperationException e) {
-			LOGGER.warn("[IrisES] failed to read ShaderStage.glRef", e);
-			return -1;
-		}
-	}
-
-	private static String firstLines(String src, int n) {
-		if (src == null) {
-			return "(null)";
-		}
-		String[] lines = src.split("\n", -1);
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < Math.min(lines.length, n); i++) {
-			sb.append(lines[i]).append('\n');
-		}
-		return sb.toString();
 	}
 }
