@@ -1,9 +1,9 @@
 package com.uniaball.irises.mixin;
 
-import com.mojang.blaze3d.shaders.Program;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.server.packs.resources.ResourceProvider;
+import net.minecraft.client.gl.ShaderProgram;
+import net.minecraft.client.gl.ShaderStage;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.resource.ResourceFactory;
 import org.lwjgl.opengl.GL20C;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Diagnostic mixin for the "clouds not rendering" issue (Iris 1.8.14 + Sodium 0.8.13).
  *
  * Sodium 0.8.13 ships its own assets/minecraft/shaders/core/clouds.{vsh,fsh,json} which
- * override the vanilla resources. Its CloudRenderer builds a clouds ShaderInstance whose
+ * override the vanilla resources. Its CloudRenderer builds a clouds ShaderProgram whose
  * clouds.json declares exactly ModelViewMat/ProjMat/ColorModulator/FogStart/FogEnd/FogColor,
  * yet at runtime the game logs "could not find uniform named ..." for all six, so clouds
  * render with zero matrices and are invisible.
@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * plus the six uniform locations, so we can tell whether the linked GLSL is Sodium's own
  * (vanilla uniform names) or an Iris-transformed copy (iris_ prefix). That decides the fix.
  */
-@Mixin(ShaderInstance.class)
+@Mixin(ShaderProgram.class)
 public abstract class MixinShaderInstanceES {
 	private static final Logger LOGGER = LoggerFactory.getLogger("IrisES");
 
@@ -37,30 +37,30 @@ public abstract class MixinShaderInstanceES {
 
 	@Shadow
 	@Final
-	private int programId;
+	private int glRef;
 
 	@Shadow
 	@Final
-	private Program vertexProgram;
+	private ShaderStage vertexShader;
 
 	@Shadow
 	@Final
-	private Program fragmentProgram;
+	private ShaderStage fragmentShader;
 
-	@Inject(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Ljava/lang/String;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At("TAIL"))
-	private void irises$inspectClouds(ResourceProvider provider, String name, VertexFormat format, CallbackInfo ci) {
+	@Inject(method = "<init>(Lnet/minecraft/resource/ResourceFactory;Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;)V", at = @At("TAIL"))
+	private void irises$inspectClouds(ResourceFactory factory, String name, VertexFormat format, CallbackInfo ci) {
 		if (!"clouds".equals(name)) {
 			return;
 		}
 
-		LOGGER.info("[IrisES] clouds program {} linked. Uniform locations:", programId);
+		LOGGER.info("[IrisES] clouds program {} linked. Uniform locations:", glRef);
 		for (String u : CLOUDS_UNIFORMS) {
-			int loc = GL20C.glGetUniformLocation(programId, u);
+			int loc = GL20C.glGetUniformLocation(glRef, u);
 			LOGGER.info("[IrisES]   uniform '{}' -> location {}", u, loc);
 		}
 
-		int vsId = vertexProgram.getId();
-		int fsId = fragmentProgram.getId();
+		int vsId = vertexShader.glRef;
+		int fsId = fragmentShader.glRef;
 		String vsh = GL20C.glGetShaderSource(vsId);
 		String fsh = GL20C.glGetShaderSource(fsId);
 
