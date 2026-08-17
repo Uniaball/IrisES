@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"TransformPatcherMixin",
-		"MixinShaderInstanceES"
+		"MixinShaderInstanceES",
+		"ShaderStageAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
