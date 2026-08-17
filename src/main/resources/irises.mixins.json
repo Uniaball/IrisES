@@ -3,7 +3,8 @@
 	"package": "com.uniaball.irises.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"TransformPatcherMixin"
+		"TransformPatcherMixin",
+		"MixinShaderInstanceES"
 	],
 	"injectors": {
 		"defaultRequire": 1
