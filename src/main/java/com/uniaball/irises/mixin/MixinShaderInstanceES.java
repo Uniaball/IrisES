@@ -43,7 +43,7 @@ public abstract class MixinShaderInstanceES {
 	private ShaderStage fragmentShader;
 
 	@Unique
-	private static boolean irises$cloudsSeen;
+	private static int irises$cloudsSeen;
 
 	@Inject(method = "<init>(Lnet/minecraft/resource/ResourceFactory;Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;)V", at = @At("TAIL"))
 	private void irises$inspectClouds(ResourceFactory factory, String name, VertexFormat format, CallbackInfo ci) {
@@ -54,12 +54,11 @@ public abstract class MixinShaderInstanceES {
 		String vsName = vertexShader == null ? "(null)" : ((ShaderStageAccessor) vertexShader).irises$getName();
 		String fsName = fragmentShader == null ? "(null)" : ((ShaderStageAccessor) fragmentShader).irises$getName();
 
-		// Only log once per distinct vertex shader name to keep the log small.
-		String key = vsName + "|" + fsName;
-		if (!irises$cloudsSeen) {
-			irises$cloudsSeen = true;
-			LOGGER.info("[IrisES] clouds program linked. vertexShader.name='{}' fragmentShader.name='{}' (program {})",
-				vsName, fsName, glRef);
-		}
+		// Log every distinct clouds instance: the concrete class tells us whether this
+		// program belongs to Iris (ExtendedShader, silently swallows uniform warnings)
+		// or to Sodium's CloudRenderer (plain ShaderProgram).
+		irises$cloudsSeen++;
+		LOGGER.info("[IrisES] clouds instance #{} linked. class={} vertexShader.name='{}' fragmentShader.name='{}' (program {})",
+			irises$cloudsSeen, getClass().getName(), vsName, fsName, glRef);
 	}
 }
