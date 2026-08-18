@@ -13,23 +13,28 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Replace the GLSL source of Sodium's "clouds" shader program with an IrisES-owned,
- * #moj_import-free copy.
+ * Give Sodium's "clouds" ShaderProgram a source that links with the vanilla
+ * uniform names, without touching Iris's own CLOUDS programs.
  *
- * <p>Root cause: Sodium 0.8.x ships its own core/clouds.{vsh,fsh} whose GLSL uses
- * {@code #moj_import <fog.glsl>}; on the DesktopGlues + Adreno stack the resulting
- * clouds program links with none of the vanilla uniforms, so clouds render with
- * zero matrices and are invisible. Shipping the same resources from IrisES does not
- * help because Fabric loads Sodium after IrisES, so Sodium's copy wins the resource
- * merge.
+ * <p>Root cause chain (Iris 1.8.14 + Sodium 0.8.x):
+ * <ol>
+ *   <li>Iris routes every shader resource through its own factory, so the
+ *       "clouds" program Sodium's CloudRenderer builds receives the
+ *       Iris-transformed gbuffers_clouds GLSL ({@code #version 330 core},
+ *       {@code iris_*} uniform names) instead of Sodium's raw core/clouds.</li>
+ *   <li>Iris's own CLOUDS programs are {@code ExtendedShader}s, which get
+ *       Iris's uniform renaming. Sodium's program is a plain ShaderProgram
+ *       whose json (from Sodium's clouds.json) asks for the vanilla names
+ *       (ModelViewMat/ProjMat/ColorModulator/FogStart/FogEnd/FogColor); none
+ *       exist in the iris_-prefixed GLSL, so the program links "empty" and
+ *       clouds render with zero matrices.</li>
+ * </ol>
  *
- * <p>{@link ShaderStage#load} receives the raw shader file as an InputStream right
- * before preprocessing and compilation. Two programs are named "clouds" at runtime:
- * Iris's own CLOUDS program (ExtendedShader, whose source is Iris-transformed GLSL
- * without moj_import) and Sodium CloudRenderer's program (plain ShaderProgram, whose
- * source is the raw Sodium resource with moj_import). Instead of tracking the
- * caller, we inspect the stream content: only when it contains {@code #moj_import}
- * do we swap in our bundled copy.
+ * <p>{@link ShaderStage#load} receives the raw GLSL InputStream right before
+ * preprocessing and compilation. When the call originates from Sodium's
+ * CloudRenderer (no {@code net.irisshaders.iris.*} frame in the stack), we
+ * swap the stream for our bundled vanilla-named copy so all six uniforms are
+ * found. Iris's ExtendedShader construction is left untouched.
  */
 @Mixin(ShaderStage.class)
 public abstract class MixinShaderStageES {
@@ -41,22 +46,29 @@ public abstract class MixinShaderStageES {
 			return source;
 		}
 
+		boolean irisCaller = false;
+		for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+			if (e.getClassName().startsWith("net.irisshaders.iris.")) {
+				irisCaller = true;
+				break;
+			}
+		}
+
 		try {
 			byte[] raw = source.readAllBytes();
 			String content = new String(raw, StandardCharsets.UTF_8);
 			String firstLine = content.lines().findFirst().orElse("(empty)").trim();
 
-			// Diagnostic: log every clouds shader that reaches ShaderStage.load so we
-			// can see what source actually arrives (Sodium's moj_import copy vs our
-			// bundled copy vs Iris-transformed GLSL).
-			LOGGER.info("[IrisES] clouds load: type={} bytes={} hasMojImport={} firstLine='{}'",
-				type, raw.length, content.contains("#moj_import"), firstLine);
+			LOGGER.info("[IrisES] clouds load: type={} bytes={} irisCaller={} firstLine='{}'",
+				type, raw.length, irisCaller, firstLine);
 
-			if (!content.contains("#moj_import")) {
-				// Iris-transformed GLSL or some other already-valid source: pass through.
+			if (irisCaller) {
+				// Iris's own CLOUDS program: keep the Iris-transformed GLSL.
 				return new ByteArrayInputStream(raw);
 			}
 
+			// Sodium's CloudRenderer program: swap in the vanilla-named copy so the
+			// uniforms declared by Sodium's clouds.json actually resolve.
 			String path = type == ShaderStage.Type.VERTEX
 				? "/assets/minecraft/shaders/core/clouds.vsh"
 				: "/assets/minecraft/shaders/core/clouds.fsh";
@@ -66,7 +78,7 @@ public abstract class MixinShaderStageES {
 				return new ByteArrayInputStream(raw);
 			}
 
-			LOGGER.info("[IrisES] replacing clouds {} shader (had #moj_import) with bundled {}", type, path);
+			LOGGER.info("[IrisES] replacing clouds {} shader (sodium caller) with bundled {}", type, path);
 			return ours;
 		} catch (IOException e) {
 			LOGGER.warn("[IrisES] failed to inspect clouds shader source", e);
