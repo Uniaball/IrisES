@@ -44,6 +44,13 @@ public abstract class MixinShaderStageES {
 		try {
 			byte[] raw = source.readAllBytes();
 			String content = new String(raw, StandardCharsets.UTF_8);
+			String firstLine = content.lines().findFirst().orElse("(empty)").trim();
+
+			// Diagnostic: log every clouds shader that reaches ShaderStage.load so we
+			// can see what source actually arrives (Sodium's moj_import copy vs our
+			// bundled copy vs Iris-transformed GLSL).
+			LOGGER.info("[IrisES] clouds load: type={} bytes={} hasMojImport={} firstLine='{}'",
+				type, raw.length, content.contains("#moj_import"), firstLine);
 
 			if (!content.contains("#moj_import")) {
 				// Iris-transformed GLSL or some other already-valid source: pass through.
