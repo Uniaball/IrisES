@@ -5,6 +5,7 @@
 	"mixins": [
 		"TransformPatcherMixin",
 		"MixinShaderInstanceES",
+		"MixinShaderProgramES",
 		"MixinShaderStageES",
 		"ShaderStageAccessor"
 	],

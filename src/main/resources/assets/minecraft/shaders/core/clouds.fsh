@@ -5,6 +5,7 @@ uniform vec4 FogColor;
 uniform float FogStart;
 uniform float FogEnd;
 
+in float vertexDistance;
 in vec4 vertexColor;
 
 out vec4 fragColor;
@@ -20,8 +21,11 @@ float linear_fog_fade(float vertexDistance, float fogStart, float fogEnd) {
 
 void main() {
     vec4 color = vertexColor * ColorModulator;
+
     if (color.a < 0.1) {
         discard;
     }
-    fragColor = color;
+
+    float fade = linear_fog_fade(vertexDistance, FogStart, FogEnd);
+    fragColor = vec4(color.rgb, color.a * fade);
 }
