@@ -45,6 +45,25 @@ public abstract class MixinShaderInstanceES {
 	@Unique
 	private static int irises$cloudsSeen;
 
+	/**
+	 * Vanilla ShaderStage caches compiled stages per (type, name). Iris's own
+	 * "clouds" ExtendedShader compiles first and caches its iris_-prefixed GLSL;
+	 * Sodium's CloudRenderer program (a plain ShaderProgram) then reuses that
+	 * cached stage, so none of its vanilla uniform names resolve. Bust the
+	 * "clouds" cache entries before every clouds ShaderProgram construction so
+	 * the program actually recompiles (and MixinShaderStageES can swap in our
+	 * vanilla-named source for the Sodium one). Static handler at HEAD is fine
+	 * (no access to 'this' before super()).
+	 */
+	@Inject(method = "<init>(Lnet/minecraft/resource/ResourceFactory;Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;)V", at = @At("HEAD"))
+	private static void irises$purgeCloudsCache(ResourceFactory factory, String name, VertexFormat format, CallbackInfo ci) {
+		if ("clouds".equals(name)) {
+			for (ShaderStage.Type type : ShaderStage.Type.values()) {
+				type.getLoadedShaders().remove("clouds");
+			}
+		}
+	}
+
 	@Inject(method = "<init>(Lnet/minecraft/resource/ResourceFactory;Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;)V", at = @At("TAIL"))
 	private void irises$inspectClouds(ResourceFactory factory, String name, VertexFormat format, CallbackInfo ci) {
 		if (!"clouds".equals(name)) {
