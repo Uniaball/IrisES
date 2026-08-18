@@ -30,11 +30,13 @@ import java.nio.charset.StandardCharsets;
  *       clouds render with zero matrices.</li>
  * </ol>
  *
- * <p>{@link ShaderStage#load} receives the raw GLSL InputStream right before
- * preprocessing and compilation. When the call originates from Sodium's
- * CloudRenderer (no {@code net.irisshaders.iris.*} frame in the stack), we
- * swap the stream for our bundled vanilla-named copy so all six uniforms are
- * found. Iris's ExtendedShader construction is left untouched.
+ * <p>We cannot distinguish the two "clouds" programs by their source (both get
+ * the same Iris-transformed GLSL) and both can appear with Iris frames on the
+ * stack (Iris's pipeline setup triggers Sodium's program load too). The
+ * reliable marker is the concrete constructor: Iris's programs go through
+ * {@code ExtendedShader.<init>}; Sodium's is a plain ShaderProgram, whose
+ * construction never passes through {@code ExtendedShader.<init>}. Only in the
+ * latter case do we swap in our bundled vanilla-named copy.
  */
 @Mixin(ShaderStage.class)
 public abstract class MixinShaderStageES {
@@ -46,10 +48,11 @@ public abstract class MixinShaderStageES {
 			return source;
 		}
 
-		boolean irisCaller = false;
+		boolean irisOwnShader = false;
 		for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
-			if (e.getClassName().startsWith("net.irisshaders.iris.")) {
-				irisCaller = true;
+			if (e.getClassName().startsWith("net.irisshaders.iris.pipeline.programs.ExtendedShader")
+				&& "<init>".equals(e.getMethodName())) {
+				irisOwnShader = true;
 				break;
 			}
 		}
@@ -59,10 +62,28 @@ public abstract class MixinShaderStageES {
 			String content = new String(raw, StandardCharsets.UTF_8);
 			String firstLine = content.lines().findFirst().orElse("(empty)").trim();
 
-			LOGGER.info("[IrisES] clouds load: type={} bytes={} irisCaller={} firstLine='{}'",
-				type, raw.length, irisCaller, firstLine);
+			// Keep the first few non-framework frames so the next log shows who
+			// actually constructs this clouds program.
+			StringBuilder caller = new StringBuilder();
+			for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+				String cn = e.getClassName();
+				if (cn.startsWith("java.") || cn.startsWith("jdk.") || cn.startsWith("org.spongepowered.asm")
+					|| cn.startsWith("com.uniaball")) {
+					continue;
+				}
+				if (caller.length() > 0) {
+					caller.append(" -> ");
+				}
+				caller.append(cn.substring(cn.lastIndexOf('.') + 1)).append('.').append(e.getMethodName());
+				if (caller.length() > 220) {
+					break;
+				}
+			}
 
-			if (irisCaller) {
+			LOGGER.info("[IrisES] clouds load: type={} bytes={} irisOwnShader={} firstLine='{}' caller=[{}]",
+				type, raw.length, irisOwnShader, firstLine, caller);
+
+			if (irisOwnShader) {
 				// Iris's own CLOUDS program: keep the Iris-transformed GLSL.
 				return new ByteArrayInputStream(raw);
 			}
