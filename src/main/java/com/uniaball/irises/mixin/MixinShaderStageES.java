@@ -1,5 +1,6 @@
 package com.uniaball.irises.mixin;
 
+import com.uniaball.irises.CloudProgramTracker;
 import net.minecraft.client.gl.ShaderStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,7 @@ public abstract class MixinShaderStageES {
 
 	@ModifyVariable(method = "load", at = @At("HEAD"), argsOnly = true)
 	private static InputStream irises$replaceCloudsSource(InputStream source, ShaderStage.Type type, String name) {
-		if (!"clouds".equals(name) || MixinShaderProgramES.isIrisClouds()) {
+		if (!"clouds".equals(name) || CloudProgramTracker.isIrisClouds()) {
 			return source;
 		}
 
